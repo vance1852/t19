@@ -99,6 +99,7 @@ export default function WarehouseCanvas() {
       drawPickerTrails(ctx, pickers, wx, wy, s);
       drawPickers(ctx, pickers, wx, wy, s);
       drawHUD(ctx, w, simTime, orders);
+      drawLegend(ctx, w, h);
 
       rafRef.current = requestAnimationFrame(render);
     };
@@ -151,11 +152,11 @@ function drawColdZone(
 ) {
   const r = wh.coldZoneRect;
   ctx.fillStyle = "rgba(59, 130, 246, 0.08)";
-  ctx.fillRect(wx(r.x), wy(r.y), (r.w) * _s, (r.h) * _s);
+  ctx.fillRect(wx(r.x), wy(r.y), r.w * _s, r.h * _s);
   ctx.strokeStyle = "rgba(59, 130, 246, 0.5)";
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
-  ctx.strokeRect(wx(r.x), wy(r.y), (r.w) * _s, (r.h) * _s);
+  ctx.strokeRect(wx(r.x), wy(r.y), r.w * _s, r.h * _s);
   ctx.setLineDash([]);
   ctx.fillStyle = "rgba(59, 130, 246, 0.8)";
   ctx.font = "11px sans-serif";
@@ -178,7 +179,7 @@ function drawAisles(
     const len = Math.hypot(dx, dy);
     const nx = -dy / len;
     const ny = dx / len;
-    const hw = (a.width / 2);
+    const hw = a.width / 2;
     ctx.beginPath();
     ctx.moveTo(wx(a.x1 + nx * hw), wy(a.y1 + ny * hw));
     ctx.lineTo(wx(a.x2 + nx * hw), wy(a.y2 + ny * hw));
@@ -217,8 +218,12 @@ function drawSlots(
   const pickingSlotIds = new Set<string>();
   pickers.forEach((p) => {
     if (p.status === "picking" && p.currentWave) {
-      const slotId = p.currentWave.slotIds[p.currentWave.currentStep];
-      if (slotId) pickingSlotIds.add(slotId);
+      const pointIdx = p.currentWave.currentStep - 1;
+      const slotIndices = p.currentWave.visitSlotsAtPoint[pointIdx] ?? [];
+      slotIndices.forEach((si) => {
+        const slotId = p.currentWave!.slotIds[si];
+        if (slotId) pickingSlotIds.add(slotId);
+      });
     }
   });
   const ss = Math.max(2, _s * 0.4);
@@ -261,9 +266,9 @@ function drawPackingStations(
   wy: (y: number) => number,
   _s: number,
 ) {
-  wh.packingStations.forEach((ps: PackingStation) => {
-    const w = 4 * _s;
-    const h = 3 * _s;
+  wh.packingStations.forEach((ps: PackingStation, idx: number) => {
+    const w = 5 * _s;
+    const h = 3.5 * _s;
     const x = wx(ps.position.x) - w / 2;
     const y = wy(ps.position.y) - h / 2;
     roundRect(ctx, x, y, w, h, 4);
@@ -272,15 +277,26 @@ function drawPackingStations(
     ctx.strokeStyle = ps.busy ? "#f59e0b" : "#22d3ee";
     ctx.lineWidth = 1.5;
     ctx.stroke();
+    ctx.fillStyle = ps.busy ? "#f59e0b" : "#22d3ee";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(`复核台 ${idx + 1}`, x + w / 2, y + 3);
+    ctx.fillStyle = "#cbd5e1";
+    ctx.font = "10px sans-serif";
+    const statusText = ps.busy ? "工作中" : "空闲";
+    ctx.fillText(statusText, x + w / 2, y + h - 14);
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
     if (ps.queue.length > 0) {
       const bx = x + w - 6;
       const by = y - 6;
       ctx.beginPath();
-      ctx.arc(bx, by, 7, 0, Math.PI * 2);
+      ctx.arc(bx, by, 8, 0, Math.PI * 2);
       ctx.fillStyle = "#ef4444";
       ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.font = "bold 9px sans-serif";
+      ctx.font = "bold 10px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(ps.queue.length), bx, by);
@@ -405,4 +421,27 @@ function drawHUD(
     ctx.fillText(l.value, x, y);
   });
   ctx.textAlign = "start";
+}
+
+function drawLegend(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const items = [
+    { label: "拣货员 空闲", color: "#22c55e" },
+    { label: "拣货员 移动中", color: "#22d3ee" },
+    { label: "拣货员 取货中", color: "#f59e0b" },
+    { label: "拣货员 排队中", color: "#ef4444" },
+    { label: "打包台 空闲", color: "#22d3ee" },
+    { label: "打包台 工作中", color: "#f59e0b" },
+  ];
+  const padX = 12;
+  const startY = h - items.length * 16 - 12;
+  ctx.font = "11px sans-serif";
+  items.forEach((item, i) => {
+    const y = startY + i * 16;
+    ctx.beginPath();
+    ctx.rect(padX, y - 9, 10, 10);
+    ctx.fillStyle = item.color;
+    ctx.fill();
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(item.label, padX + 16, y);
+  });
 }

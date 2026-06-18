@@ -207,14 +207,17 @@ export function generateWarehouse(cfg: WarehouseConfig): Warehouse {
 
   const packingStations: PackingStation[] = [];
   const packX = cfg.width - packZoneW / 2 - 2;
+  const packAreaTop = marginY + 4;
+  const packAreaBottom = marginY + innerH - 10;
+  const packAreaHeight = packAreaBottom - packAreaTop;
   for (let i = 0; i < cfg.packingStationCount; i++) {
     const py =
-      marginY + (i + 0.5) * (innerH / cfg.packingStationCount) + innerH * 0;
+      packAreaTop + (i + 0.5) * (packAreaHeight / cfg.packingStationCount);
     packingStations.push({
       id: `ps-${i}`,
       position: {
         x: packX,
-        y: Math.min(marginY + innerH - 2, Math.max(marginY + 2, py)),
+        y: py,
       },
       busy: false,
       busyUntil: 0,
@@ -228,9 +231,9 @@ export function generateWarehouse(cfg: WarehouseConfig): Warehouse {
     {
       id: "stg-0",
       x: cfg.width - packZoneW,
-      y: marginY + innerH - 6,
+      y: marginY + innerH - 5,
       w: packZoneW - 2,
-      h: 5,
+      h: 4,
     },
   ];
 
@@ -268,12 +271,15 @@ export function findNearestPackingStation(
   warehouse: Warehouse,
   pos: Vec2,
 ): PackingStation {
+  const queuePenalty = 15;
   let best = warehouse.packingStations[0];
-  let bestD = Infinity;
+  let bestScore = Infinity;
   for (const ps of warehouse.packingStations) {
     const d = Math.hypot(ps.position.x - pos.x, ps.position.y - pos.y);
-    if (d < bestD) {
-      bestD = d;
+    const queueLen = ps.queue.length + (ps.busy ? 1 : 0);
+    const score = d + queueLen * queuePenalty;
+    if (score < bestScore) {
+      bestScore = score;
       best = ps;
     }
   }

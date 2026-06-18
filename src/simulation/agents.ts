@@ -147,19 +147,21 @@ export function stepPicker(
     if (picker.trail.length > 8) picker.trail.shift();
     wave.currentStep++;
 
-    const slotIdx = wave.currentStep - 1;
-    if (slotIdx >= 0 && slotIdx < wave.slotIds.length) {
-      const slotId = wave.slotIds[slotIdx];
+    const pointIdx = wave.currentStep - 1;
+    const slotIndices = wave.visitSlotsAtPoint[pointIdx] ?? [];
+    if (slotIndices.length > 0) {
       picker.status = "picking";
-      picker.pickingUntil = time + pickingTimePerItem;
-      result.pickedSlotIds.push(slotId);
-
-      for (const oid of wave.orderIds) {
-        const order = orders.get(oid);
-        if (order) {
-          for (const item of order.items) {
-            if (item.slotId === slotId && item.pickedAt === null) {
-              item.pickedAt = time;
+      picker.pickingUntil = time + pickingTimePerItem * slotIndices.length;
+      for (const slotIdx of slotIndices) {
+        const slotId = wave.slotIds[slotIdx];
+        result.pickedSlotIds.push(slotId);
+        for (const oid of wave.orderIds) {
+          const order = orders.get(oid);
+          if (order) {
+            for (const item of order.items) {
+              if (item.slotId === slotId && item.pickedAt === null) {
+                item.pickedAt = time;
+              }
             }
           }
         }
@@ -193,6 +195,7 @@ export function createWave(
     slotIds,
     pathIds: [],
     pathPoints: [],
+    visitSlotsAtPoint: [],
     currentStep: 0,
     createdAt,
   };

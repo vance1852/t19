@@ -81,6 +81,7 @@ export interface Wave {
   slotIds: string[];
   pathIds: string[];
   pathPoints: Vec2[];
+  visitSlotsAtPoint: number[][];
   currentStep: number;
   createdAt: number;
 }

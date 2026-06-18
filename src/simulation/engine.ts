@@ -218,6 +218,7 @@ export function stepSimulation(state: SimState, params: SimParams): void {
         );
         assignedWave.pathIds = route.nodePath;
         assignedWave.pathPoints = route.points;
+        assignedWave.visitSlotsAtPoint = route.visitSlotsAtPoint;
         assignedWave.currentStep = 0;
         picker.currentWave = assignedWave;
         picker.status = "moving";

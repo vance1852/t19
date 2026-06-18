@@ -120,9 +120,10 @@ export function twoOpt(distMatrix: number[][], tour: number[]): number[] {
         const newDist = distMatrix[a][c] + distMatrix[b][d];
 
         if (newDist < oldDist - 1e-9) {
-          const newTour = best.slice(0, i + 1).concat(
-            best.slice(i + 1, j + 1).reverse(),
-          ).concat(best.slice(j + 1));
+          const newTour = best
+            .slice(0, i + 1)
+            .concat(best.slice(i + 1, j + 1).reverse())
+            .concat(best.slice(j + 1));
           if (tourDist(newTour) < tourDist(best)) {
             best = newTour;
             improved = true;
@@ -158,7 +159,12 @@ export function planRoute(
   startPos: Vec2,
   slotIds: string[],
   endPos: Vec2,
-): { nodePath: string[]; points: Vec2[]; totalDist: number } {
+): {
+  nodePath: string[];
+  points: Vec2[];
+  totalDist: number;
+  visitSlotsAtPoint: number[][];
+} {
   const startNodeId = findNearestNode(warehouse, startPos);
   const endNodeId = findNearestNode(warehouse, endPos);
 
@@ -172,12 +178,17 @@ export function planRoute(
   const m = targetNodeIds.length;
 
   if (m === 0) {
-    return { nodePath: [], points: [], totalDist: 0 };
+    return { nodePath: [], points: [], totalDist: 0, visitSlotsAtPoint: [] };
   }
 
   if (m === 1) {
     const pos = getNodePosition(warehouse, targetNodeIds[0]) ?? startPos;
-    return { nodePath: [targetNodeIds[0]], points: [startPos, pos, endPos], totalDist: dist(startPos, endPos) };
+    return {
+      nodePath: [targetNodeIds[0]],
+      points: [startPos, pos, endPos],
+      totalDist: dist(startPos, endPos),
+      visitSlotsAtPoint: [[], slotIds.map((_, i) => i), []],
+    };
   }
 
   const distMatrix: number[][] = Array.from({ length: m }, () =>
@@ -218,11 +229,19 @@ export function planRoute(
     tour = tour.slice(startIdx).concat(tour.slice(0, startIdx));
   }
 
+  const slotNodeToSlotIdx = new Map<string, number[]>();
+  slotNodeIds.forEach((nodeId, i) => {
+    if (!slotNodeToSlotIdx.has(nodeId)) slotNodeToSlotIdx.set(nodeId, []);
+    slotNodeToSlotIdx.get(nodeId)!.push(i);
+  });
+
   const fullNodePath: string[] = [];
   const fullPoints: Vec2[] = [];
+  const visitSlotsAtPoint: number[][] = [];
   let totalDist = 0;
 
   fullPoints.push(startPos);
+  visitSlotsAtPoint.push([]);
   const startNodePos = getNodePosition(warehouse, startNodeId);
   if (startNodePos) {
     totalDist += dist(startPos, startNodePos);
@@ -236,30 +255,39 @@ export function planRoute(
     const key = `${fromNodeId}->${toNodeId}`;
     const segmentPath = pathCache.get(key) ?? [];
 
+    const processNode = (nid: string, isFirstOfSegment: boolean) => {
+      const pos = getNodePosition(warehouse, nid);
+      if (pos) {
+        fullPoints.push(pos);
+        const isSlotVisit =
+          toIdx >= 1 && toIdx <= slotNodeIds.length && nid === toNodeId;
+        if (isSlotVisit) {
+          const slotIdx = toIdx - 1;
+          const slotNodeId = slotNodeIds[slotIdx];
+          visitSlotsAtPoint.push(slotNodeToSlotIdx.get(slotNodeId) ?? []);
+        } else if (isFirstOfSegment) {
+          visitSlotsAtPoint.push([]);
+        } else {
+          visitSlotsAtPoint.push([]);
+        }
+      }
+    };
+
     if (ti === 0) {
-      for (const nid of segmentPath) {
+      for (let k = 0; k < segmentPath.length; k++) {
+        const nid = segmentPath[k];
         fullNodePath.push(nid);
-        const pos = getNodePosition(warehouse, nid);
-        if (pos) fullPoints.push(pos);
+        processNode(nid, k === 0);
       }
     } else {
       for (let k = 1; k < segmentPath.length; k++) {
-        fullNodePath.push(segmentPath[k]);
-        const pos = getNodePosition(warehouse, segmentPath[k]);
-        if (pos) fullPoints.push(pos);
+        const nid = segmentPath[k];
+        fullNodePath.push(nid);
+        processNode(nid, false);
       }
     }
 
     totalDist += distMatrix[fromIdx][toIdx];
-
-    if (toIdx >= 1 && toIdx <= slotNodeIds.length) {
-      const slotIdx = toIdx - 1;
-      const slotId = slotIds[slotIdx];
-      const slot = warehouse.slots.find((s) => s.id === slotId);
-      if (slot) {
-        fullPoints.push(slot.position);
-      }
-    }
   }
 
   const lastNodePos = getNodePosition(warehouse, endNodeId);
@@ -267,10 +295,12 @@ export function planRoute(
     totalDist += dist(lastNodePos, endPos);
   }
   fullPoints.push(endPos);
+  visitSlotsAtPoint.push([]);
 
   return {
     nodePath: fullNodePath,
     points: fullPoints,
     totalDist,
+    visitSlotsAtPoint,
   };
 }
